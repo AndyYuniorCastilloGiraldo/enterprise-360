@@ -18,3 +18,9 @@ spring:
 
   flyway:
     enabled: true
+
+# Clave de prueba: 512 bits en Base64 (sólo para tests; nunca usada en producción).
+jwt:
+  secret: dGVzdC1zZWNyZXQta2V5LWZvci11bml0LXRlc3RzLW9ubHktbm90LWZvci1wcm9kdWN0aW9uLXVzZS0yMDI2
+  expiration-ms: 3600000
+
