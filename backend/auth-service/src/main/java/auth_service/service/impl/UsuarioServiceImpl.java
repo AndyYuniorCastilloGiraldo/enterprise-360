@@ -3,6 +3,7 @@ package auth_service.service.impl;
 import java.util.List;
 import java.util.UUID;
 
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -30,16 +31,19 @@ public class UsuarioServiceImpl implements UsuarioService {
     private final EmpresaRepository empresaRepository;
     private final RolRepository rolRepository;
     private final UsuarioRolRepository usuarioRolRepository;
+    private final PasswordEncoder passwordEncoder;
 
     public UsuarioServiceImpl(
             UsuarioRepository usuarioRepository,
             EmpresaRepository empresaRepository,
             RolRepository rolRepository,
-            UsuarioRolRepository usuarioRolRepository) {
+            UsuarioRolRepository usuarioRolRepository,
+            PasswordEncoder passwordEncoder) {
         this.usuarioRepository = usuarioRepository;
         this.empresaRepository = empresaRepository;
         this.rolRepository = rolRepository;
         this.usuarioRolRepository = usuarioRolRepository;
+        this.passwordEncoder = passwordEncoder;
     }
 
     @Override
@@ -57,7 +61,7 @@ public class UsuarioServiceImpl implements UsuarioService {
                 .nombres(request.nombres())
                 .apellidos(request.apellidos())
                 .email(request.email())
-                .passwordHash(request.passwordHash())
+                .passwordHash(passwordEncoder.encode(request.password()))
                 .activo(true)
                 .build();
         return toResponse(usuarioRepository.save(usuario));
