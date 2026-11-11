@@ -1,20 +1,20 @@
 package auth_service.security;
 
 import java.io.IOException;
-import java.util.List;
 
 import org.springframework.lang.NonNull;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.WebAuthenticationDetailsSource;
 import org.springframework.stereotype.Component;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+import auth_service.service.SessionTokenService;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import io.jsonwebtoken.JwtException;
 
 /**
  * Filtro que intercepta cada petición HTTP, extrae el token JWT del encabezado
@@ -30,12 +30,15 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private static final String BEARER_PREFIX = "Bearer ";
     private static final String AUTH_HEADER = "Authorization";
-    private static final String ROLE_PREFIX = "ROLE_";
-
+    private static final int MAX_ACCESS_TOKEN_LENGTH = 8_192;
     private final JwtService jwtService;
+    private final SessionTokenService sessionTokenService;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(
+            JwtService jwtService,
+            SessionTokenService sessionTokenService) {
         this.jwtService = jwtService;
+        this.sessionTokenService = sessionTokenService;
     }
 
     @Override
@@ -52,28 +55,32 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         }
 
         String token = authHeader.substring(BEARER_PREFIX.length());
-
-        if (!jwtService.esValido(token)) {
+        if (token.isBlank() || token.length() > MAX_ACCESS_TOKEN_LENGTH) {
             filterChain.doFilter(request, response);
             return;
         }
 
-        // Si ya hay autenticación en el contexto no la sobreescribimos.
-        if (SecurityContextHolder.getContext().getAuthentication() == null) {
-            List<SimpleGrantedAuthority> authorities = jwtService.extraerRoles(token)
-                    .stream()
-                    .map(rol -> new SimpleGrantedAuthority(ROLE_PREFIX + rol))
-                    .toList();
-
-            String subject = jwtService.extraerUsuarioId(token).toString();
-
-            UsernamePasswordAuthenticationToken auth =
-                    new UsernamePasswordAuthenticationToken(subject, null, authorities);
-            auth.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
-            SecurityContextHolder.getContext().setAuthentication(auth);
+        AuthPrincipal principal;
+        try {
+            principal = jwtService.parsearPrincipal(token);
+        } catch (JwtException | IllegalArgumentException exception) {
+            filterChain.doFilter(request, response);
+            return;
         }
 
+        if (!sessionTokenService.isActive(principal)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        if (SecurityContextHolder.getContext().getAuthentication() == null) {
+            UsernamePasswordAuthenticationToken authentication =
+                    new UsernamePasswordAuthenticationToken(
+                            principal, null, principal.authorities());
+            authentication.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+        }
         filterChain.doFilter(request, response);
     }
-}
 
+}
